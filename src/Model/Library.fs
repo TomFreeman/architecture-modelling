@@ -44,9 +44,13 @@ let (| Working | Unavailable | ) (service: Component) =
     | Success(_) -> Working
     | _ -> Unavailable
 
+let mitigatedBy strategy (service: Component) = 
+    {service with reliabilityProfile = strategy(service.reliabilityProfile)}
+
 let rec walkDependencies currentState dependencies =
     match dependencies with
-    | Requires(s) :: deps | ComposedOf(s) :: deps -> 
+    | Requires(s) :: deps 
+    | ComposedOf(s) :: deps -> 
                         match s with
                         | Working -> walkDependencies currentState (deps @ s.links)
                         | Unavailable -> Unavailable

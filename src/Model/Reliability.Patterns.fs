@@ -3,7 +3,7 @@ module Reliability.Patterns
 open Model
 open System
 
-let retryingProfile retries targetProfile = 
+let retrying retries targetProfile = 
     {
         works = fun () -> 
                     let rec attempt r =

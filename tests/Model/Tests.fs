@@ -21,7 +21,7 @@ let ``Reliable services are always reliable`` () =
 
 [<Theory>]
 [<InlineData(0.90, 1000, 890, 910)>]
-[<InlineData(0.50, 1000, 480, 520)>]
+[<InlineData(0.50, 1000, 475, 525)>]
 let ``Unreliable Services are accurately unreliable`` (uptime, iterations, minExpected, maxExpected) =
     let ``unreliable service`` = {
         name = "an ureliable service"
@@ -75,22 +75,29 @@ let ``Unreliable optional dependencies cause degradations not failures`` (uptime
         reliabilityProfile = randomUptimeProfile 1.0
     }
 
-    let _, failures, _ = determineServiceUptime iterations ``unreliable service``
+    let _, failures, _ = determineServiceUptime iterations ``my architecture``
 
     Assert.StrictEqual(0, failures)
 
 
 [<Theory>]
 [<InlineData(0.90, 1000, 950, 1000)>]
-[<InlineData(0.50, 1000, 950, 1000)>]
+[<InlineData(0.50, 1000, 850, 1000)>]
 let ``Retrying Unreliable Services improve reliability`` (uptime, iterations, minExpected, maxExpected) =
     let ``unreliable service`` = {
         name = "an ureliable service"
         links = []
         serviceType = Internal
-        reliabilityProfile = randomUptimeProfile uptime |> retryingProfile 3
+        reliabilityProfile = randomUptimeProfile uptime
     }
 
-    let successes, _, _ = determineServiceUptime iterations ``unreliable service``
+    let ``my architecture`` = {
+        name = "my architecture"
+        links = [Requires(``unreliable service`` |> mitigatedBy (retrying 3))]
+        serviceType = Internal
+        reliabilityProfile = randomUptimeProfile 1.0
+    }
+
+    let successes, _, _ = determineServiceUptime iterations ``my architecture``
 
     Assert.InRange(successes, minExpected, maxExpected)

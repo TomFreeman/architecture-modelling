@@ -6,5 +6,10 @@
   <ItemGroup>
     <Compile Include="Library.fs" />
     <Compile Include="Reliability.Patterns.fs" />
+    <Compile Include="Model.Translations.fs" />
+    <Compile Include="Examples.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Fable.Core" Version="4.0.0-snake-island-alpha-007" />
   </ItemGroup>
 </Project>

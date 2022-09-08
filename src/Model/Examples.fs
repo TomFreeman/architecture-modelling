@@ -18,8 +18,9 @@ let generateComplexArchitecture levels =
                 |> List.filter (fun (j) -> rand.Next(3) = 0)
                 |> List.map (fun (link) ->
                     if rand.NextDouble() > 0.5 then Requires(link |> mitigatedBy (retrying 5)) else BenefitsFrom(link))
+                |> List.map (fun (link) -> {relationship=link; metadata=None})
                 |> List.toArray
-            {name = name; links = links; serviceType = serviceType; reliabilityProfile = reliabilityProfile})
+            {name = name; links = links; serviceType = serviceType; reliabilityProfile = reliabilityProfile; metadata = None})
 
     [0..levels]
     |> List.fold (fun acc level ->

@@ -11,6 +11,7 @@ let ``a totally reliable service`` =
         links = [||]
         serviceType = Internal
         reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
     }
 
 [<Fact>]
@@ -28,6 +29,7 @@ let ``Unreliable Services are accurately unreliable`` (uptime, iterations, minEx
         links = [||]
         serviceType = Internal
         reliabilityProfile = randomUptimeProfile uptime
+        metadata = None
     }
 
     let successes, _, _ = determineServiceUptime iterations ``unreliable service``
@@ -43,13 +45,15 @@ let ``Unreliable dependencies make your architecture unreliable`` (uptime, itera
         links = [||]
         serviceType = Internal
         reliabilityProfile = randomUptimeProfile uptime
+        metadata = None
     }
 
     let ``my architecture`` = {
         name = "my architecture"
-        links = [|Requires(``unreliable service``)|]
+        links = [|Requires(``unreliable service``)|] |> noMetadata
         serviceType = Internal
         reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
     }
 
     let successes, _, _ = determineServiceUptime iterations ``unreliable service``
@@ -66,13 +70,15 @@ let ``Unreliable optional dependencies cause degradations not failures`` (uptime
         links = [||]
         serviceType = Internal
         reliabilityProfile = randomUptimeProfile uptime
+        metadata = None
     }
 
     let ``my architecture`` = {
         name = "my architecture"
-        links = [|BenefitsFrom(``unreliable service``)|]
+        links = [|plain(BenefitsFrom(``unreliable service``))|]
         serviceType = Internal
         reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
     }
 
     let _, failures, _ = determineServiceUptime iterations ``my architecture``
@@ -89,13 +95,15 @@ let ``Retrying Unreliable Services improve reliability`` (uptime, iterations, mi
         links = [||]
         serviceType = Internal
         reliabilityProfile = randomUptimeProfile uptime
+        metadata = None
     }
 
     let ``my architecture`` = {
         name = "my architecture"
-        links = [|Requires(``unreliable service`` |> mitigatedBy (retrying 3))|]
+        links = [|plain(Requires(``unreliable service`` |> mitigatedBy (retrying 3)))|]
         serviceType = Internal
         reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
     }
 
     let successes, _, _ = determineServiceUptime iterations ``my architecture``
@@ -123,15 +131,19 @@ let ``Can translate an architecture into something simpler`` () =
     let startingPoint = {
         name = "my architecture"
         links = [|Requires({
-            name = "a totally reliable service"; links = [||]; serviceType = Internal; reliabilityProfile = randomUptimeProfile 1.0})|]
+            name = "a totally reliable service";
+            links = [||]; serviceType = Internal; reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        })|] |> noMetadata
         serviceType = Internal
         reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
     }
 
     let simpleLeafFromComponent (component: Component) =
         { name = component.name; branches = [||] }
 
-    let simpleBranchFromLink (link: relationships) (leaf: simpleTree) =
+    let simpleBranchFromLink (link: Link) (leaf: simpleTree) =
         { branch = leaf }
 
     let growTree leaf branches =
@@ -143,3 +155,96 @@ let ``Can translate an architecture into something simpler`` () =
     Assert.StrictEqual("my architecture", output.name)
     Assert.Equal(1, output.branches.Length)
     Assert.Equal("a totally reliable service", output.branches.[0].branch.name)
+
+[<Fact>]
+let ``Equality Comparison works`` () =
+    let a = {
+        name = "a totally reliable service";
+        links = [||];
+        serviceType = Internal;
+        reliabilityProfile = randomUptimeProfile 1.0;
+        metadata = None
+    }
+
+    let b = {
+        name = "a totally reliable service"
+        links = [||]
+        serviceType = Internal
+        reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
+    }
+
+    let c = {
+        name = "a totally different service"
+        links = [||]
+        serviceType = Internal
+        reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
+    }
+
+    Assert.StrictEqual(a, b)
+    Assert.NotStrictEqual(a, c)
+
+[<Fact>]
+let ``Maps that contain components identify that fact``() =
+    let a = {
+        name = "a totally reliable service";
+        links = [||];
+        serviceType = Internal;
+        reliabilityProfile = randomUptimeProfile 1.0;
+        metadata = None
+    }
+
+    let b = {
+        name = "a totally reliable service"
+        links = [||]
+        serviceType = Internal
+        reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
+    }
+
+    let c = {
+        name = "a totally different service"
+        links = [||]
+        serviceType = Internal
+        reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
+    }
+
+    let targetMap = Map<_,_>([a, 1])
+    Assert.True(targetMap.ContainsKey(a))
+    Assert.True(targetMap.ContainsKey(b))
+    Assert.False(targetMap.ContainsKey(c))
+
+[<Fact>]
+let ``Stores only unique components in the translated cache`` () =
+    let dependency = {
+            name = "a unique dependency";
+            links = [||];
+            serviceType = Internal;
+            reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        }
+
+    let startingPoint = {
+        name = "a component that requires a unique dependency";
+        links = [|Requires(dependency); Requires(dependency)|] |> noMetadata
+        serviceType = Internal
+        reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
+    }
+
+    let mutable invocations = 0
+    let simpleLeafFromComponent (component: Component) =
+        invocations <- invocations + 1
+        { name = component.name; branches = [||] }
+
+    let simpleBranchFromLink (link: Link) (leaf: simpleTree) =
+        { branch = leaf }
+
+    let growTree leaf branches =
+        { leaf with branches = Array.concat([leaf.branches; branches]) }
+
+    let output = Translations.translate simpleLeafFromComponent simpleBranchFromLink growTree startingPoint
+
+    Assert.Equal(2, invocations)

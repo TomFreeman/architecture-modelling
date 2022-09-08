@@ -1,0 +1,35 @@
+---
+name: Publish to PyPI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  Publish:
+    name: Build and Publish
+    runs-on: ubuntu-latest
+    environment: PyPI
+    steps:
+      - name: Install Fable tooling
+        run: |
+          dotnet tool install --global fable --version 4.0.0-snake-island-alpha-024
+          python3 -m pip install --upgrade build
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Transpile F#
+        run: |
+          rm -rf ./dist ./out
+          fable --lang Python --cwd ./src/Model --outDir "$PWD/out"
+          cp ./src/pypi/* ./out
+          cd out
+          python3 -m build
+          mv ./dist ..
+
+      - name: Publish a Python distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_PROD_API }}

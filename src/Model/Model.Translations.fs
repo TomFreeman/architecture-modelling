@@ -2,7 +2,7 @@ module Translations
 
 open Model
 
-let rec copy (filter: Link -> bool) (start: Component) =
+let rec copy (filter: Link -> bool) (start) =
     // walk the relationships and copy them if the filter returns true
     { start with links = start.links
                         |> Array.filter filter
@@ -11,13 +11,15 @@ let rec copy (filter: Link -> bool) (start: Component) =
                                 match link.relationship with
                                 | Requires(s) -> Requires(copy filter s)
                                 | BenefitsFrom(s) -> BenefitsFrom(copy filter s)
-                                | ComposedOf(s) -> ComposedOf(copy filter s)} ) }
+                                | ComposedOf(s) -> ComposedOf(copy filter s)
+                                | ResponsibilityOf(s) -> ResponsibilityOf(copy filter s)} ) }
 
 let extractComponent link =
     match link.relationship with
     | Requires(s) -> s
     | BenefitsFrom(s) -> s
     | ComposedOf(s) -> s
+    | ResponsibilityOf(s) -> s
 
 /// Translates the given component and relationships into a
 /// different representation

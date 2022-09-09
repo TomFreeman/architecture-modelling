@@ -11,7 +11,7 @@ let generateComplexArchitecture levels =
         [0..maxNodesAtLevel]
         |> List.map (fun (i) ->
             let name = sprintf "node %d" i
-            let serviceType = if rand.NextDouble() > 0.5 then External else Internal
+            let serviceType = if rand.NextDouble() > 0.5 then ExternalService else InternalService
             let reliabilityProfile = randomUptimeProfile (rand.NextDouble() * 0.5 + 0.5)
             let links =
                 possibleLinks

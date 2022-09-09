@@ -9,7 +9,7 @@ let ``a totally reliable service`` =
     {
         name = "a totally reliable service"
         links = [||]
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile 1.0
         metadata = None
     }
@@ -27,7 +27,7 @@ let ``Unreliable Services are accurately unreliable`` (uptime, iterations, minEx
     let ``unreliable service`` = {
         name = "an ureliable service"
         links = [||]
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile uptime
         metadata = None
     }
@@ -43,7 +43,7 @@ let ``Unreliable dependencies make your architecture unreliable`` (uptime, itera
     let ``unreliable service`` = {
         name = "an ureliable service"
         links = [||]
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile uptime
         metadata = None
     }
@@ -51,8 +51,8 @@ let ``Unreliable dependencies make your architecture unreliable`` (uptime, itera
     let ``my architecture`` = {
         name = "my architecture"
         links = [|Requires(``unreliable service``)|] |> noMetadata
-        serviceType = Internal
-        reliabilityProfile = randomUptimeProfile 1.0
+        serviceType = InternalService
+        reliabilityProfile = perfectUptime
         metadata = None
     }
 
@@ -68,7 +68,7 @@ let ``Unreliable optional dependencies cause degradations not failures`` (uptime
     let ``unreliable service`` = {
         name = "an ureliable service"
         links = [||]
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile uptime
         metadata = None
     }
@@ -76,8 +76,8 @@ let ``Unreliable optional dependencies cause degradations not failures`` (uptime
     let ``my architecture`` = {
         name = "my architecture"
         links = [|plain(BenefitsFrom(``unreliable service``))|]
-        serviceType = Internal
-        reliabilityProfile = randomUptimeProfile 1.0
+        serviceType = InternalService
+        reliabilityProfile = perfectUptime
         metadata = None
     }
 
@@ -93,7 +93,7 @@ let ``Retrying Unreliable Services improve reliability`` (uptime, iterations, mi
     let ``unreliable service`` = {
         name = "an ureliable service"
         links = [||]
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile uptime
         metadata = None
     }
@@ -101,7 +101,7 @@ let ``Retrying Unreliable Services improve reliability`` (uptime, iterations, mi
     let ``my architecture`` = {
         name = "my architecture"
         links = [|plain(Requires(``unreliable service`` |> mitigatedBy (retrying 3)))|]
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile 1.0
         metadata = None
     }
@@ -132,16 +132,16 @@ let ``Can translate an architecture into something simpler`` () =
         name = "my architecture"
         links = [|Requires({
             name = "a totally reliable service";
-            links = [||]; serviceType = Internal; reliabilityProfile = randomUptimeProfile 1.0
+            links = [||]; serviceType = InternalService; reliabilityProfile = randomUptimeProfile 1.0
             metadata = None
         })|] |> noMetadata
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile 1.0
         metadata = None
     }
 
-    let simpleLeafFromComponent (component: Component) =
-        { name = component.name; branches = [||] }
+    let simpleLeafFromComponent (c: Component) =
+        { name = c.name; branches = [||] }
 
     let simpleBranchFromLink (link: Link) (leaf: simpleTree) =
         { branch = leaf }
@@ -161,7 +161,7 @@ let ``Equality Comparison works`` () =
     let a = {
         name = "a totally reliable service";
         links = [||];
-        serviceType = Internal;
+        serviceType = InternalService;
         reliabilityProfile = randomUptimeProfile 1.0;
         metadata = None
     }
@@ -169,7 +169,7 @@ let ``Equality Comparison works`` () =
     let b = {
         name = "a totally reliable service"
         links = [||]
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile 1.0
         metadata = None
     }
@@ -177,7 +177,7 @@ let ``Equality Comparison works`` () =
     let c = {
         name = "a totally different service"
         links = [||]
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile 1.0
         metadata = None
     }
@@ -190,7 +190,7 @@ let ``Maps that contain components identify that fact``() =
     let a = {
         name = "a totally reliable service";
         links = [||];
-        serviceType = Internal;
+        serviceType = InternalService;
         reliabilityProfile = randomUptimeProfile 1.0;
         metadata = None
     }
@@ -198,7 +198,7 @@ let ``Maps that contain components identify that fact``() =
     let b = {
         name = "a totally reliable service"
         links = [||]
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile 1.0
         metadata = None
     }
@@ -206,7 +206,7 @@ let ``Maps that contain components identify that fact``() =
     let c = {
         name = "a totally different service"
         links = [||]
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile 1.0
         metadata = None
     }
@@ -221,7 +221,7 @@ let ``Stores only unique components in the translated cache`` () =
     let dependency = {
             name = "a unique dependency";
             links = [||];
-            serviceType = Internal;
+            serviceType = InternalService;
             reliabilityProfile = randomUptimeProfile 1.0
             metadata = None
         }
@@ -229,15 +229,15 @@ let ``Stores only unique components in the translated cache`` () =
     let startingPoint = {
         name = "a component that requires a unique dependency";
         links = [|Requires(dependency); Requires(dependency)|] |> noMetadata
-        serviceType = Internal
+        serviceType = InternalService
         reliabilityProfile = randomUptimeProfile 1.0
         metadata = None
     }
 
     let mutable invocations = 0
-    let simpleLeafFromComponent (component: Component) =
+    let simpleLeafFromComponent (c: Component) =
         invocations <- invocations + 1
-        { name = component.name; branches = [||] }
+        { name = c.name; branches = [||] }
 
     let simpleBranchFromLink (link: Link) (leaf: simpleTree) =
         { branch = leaf }

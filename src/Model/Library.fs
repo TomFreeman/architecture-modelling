@@ -1,9 +1,11 @@
 ﻿module Model
 open System
 
-type ServiceType =
-    | External
-    | Internal
+type UnitType =
+    | ExternalService
+    | InternalService
+    | Team
+    | Individual
 
 type ServiceResult =
     | Success of TimeSpan
@@ -29,10 +31,11 @@ type ReliabilityProfile = {
                 | :? ReliabilityProfile as o -> this.shorthand.CompareTo(o.shorthand)
                 | _ -> 1
 
-let perfectUptime() = {
+let perfectUptime = {
     shorthand = "perfect"
     works = fun () -> Success (TimeSpan.FromMilliseconds(1))
 }
+
 
 let randomUptimeProfile uptime =
     let rand = new Random()
@@ -49,15 +52,15 @@ type relationships =
     | Requires of Component
     | BenefitsFrom of Component
     | ComposedOf of Component
+    | ResponsibilityOf of Component
 and Link = {
     relationship: relationships
     metadata: Map<string, string> option
 }
-
 and [<CustomEquality; CustomComparison>] Component = {
             name: string
             links: Link array
-            serviceType: ServiceType
+            serviceType: UnitType
             reliabilityProfile: ReliabilityProfile
             metadata: Map<string, string> option
         }
@@ -96,6 +99,24 @@ let noMetadata (relationships: relationships seq) =
     relationships
     |> Seq.map (fun (relationship) -> plain relationship)
     |> Seq.toArray
+
+let buildTeam teamname names metadata =
+    let individuals = names
+                    |> Array.map (fun (name) ->
+                        plain(ComposedOf(
+                        {name = name;
+                        links = [||];
+                        serviceType = Individual;
+                        reliabilityProfile = perfectUptime;
+                        metadata = None})))
+    {
+        name = teamname
+        links = individuals
+        serviceType = Team
+        reliabilityProfile = perfectUptime
+        metadata = metadata
+    }
+
 
 let (| Working | Unavailable | ) (service: Component) =
     match service.reliabilityProfile.works() with

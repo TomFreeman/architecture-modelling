@@ -23,7 +23,7 @@ let extractComponent link =
 
 /// Translates the given component and relationships into a
 /// different representation
-let translate (mapComponent: Component -> 'a) (mapLink: Link -> 'a -> 'b) (attach: 'a -> 'b array -> 'a) start =
+let translateMulti (mapComponent: Component -> 'a) (mapLink: Link -> 'a -> 'b) (attach: 'a -> 'b array -> 'a) starts =
     let mutable cache = Map<Component, 'a>([])
 
     let memo f input =
@@ -47,5 +47,10 @@ let translate (mapComponent: Component -> 'a) (mapLink: Link -> 'a -> 'b) (attac
 
         attach newState newLinks
 
-    memo (dotranslate mapComponent mapLink attach) start
+    starts
+    |> Array.map (fun (start) -> memo (dotranslate mapComponent mapLink attach) start)
+
+let translate (mapComponent: Component -> 'a) (mapLink: Link -> 'a -> 'b) (attach: 'a -> 'b array -> 'a) start =
+    translateMulti mapComponent mapLink attach [|start|]
+    |> Array.head
 

@@ -157,6 +157,48 @@ let ``Can translate an architecture into something simpler`` () =
     Assert.Equal("a totally reliable service", output.branches.[0].branch.name)
 
 [<Fact>]
+let ``Can translate an architecture into something simpler starting from multiple entry points`` () =
+    let startingPoint1 = {
+        name = "Entry point 1"
+        links = [|Requires({
+            name = "a totally reliable service";
+            links = [||]; serviceType = InternalService; reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        })|] |> noMetadata
+        serviceType = InternalService
+        reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
+    }
+
+    let startingPoint2 = {
+        name = "Entry point 2"
+        links = [|Requires({
+            name = "a totally reliable service";
+            links = [||]; serviceType = InternalService; reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        })|] |> noMetadata
+        serviceType = InternalService
+        reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
+    }
+
+    let simpleLeafFromComponent (c: Component) =
+        { name = c.name; branches = [||] }
+
+    let simpleBranchFromLink (link: Link) (leaf: simpleTree) =
+        { branch = leaf }
+
+    let growTree leaf branches =
+        { leaf with branches = Array.concat([leaf.branches; branches]) }
+
+    let output = Translations.translateMulti simpleLeafFromComponent simpleBranchFromLink growTree [|startingPoint1; startingPoint2|]
+
+    Assert.NotNull(output)
+    Assert.Equal(output.Length, 2)
+    Assert.StrictEqual("Entry point 1", output.[0].name)
+    Assert.StrictEqual("Entry point 2", output.[1].name)
+
+[<Fact>]
 let ``Equality Comparison works`` () =
     let a = {
         name = "a totally reliable service";
@@ -248,3 +290,45 @@ let ``Stores only unique components in the translated cache`` () =
     let output = Translations.translate simpleLeafFromComponent simpleBranchFromLink growTree startingPoint
 
     Assert.Equal(2, invocations)
+
+[<Fact>]
+let ``Translate multi translates each node once`` () =
+    let dependency = {
+            name = "a unique dependency";
+            links = [||];
+            serviceType = InternalService;
+            reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        }
+
+    let startingPoint1 = {
+        name = "a component that requires a unique dependency";
+        links = [|Requires(dependency); Requires(dependency)|] |> noMetadata
+        serviceType = InternalService
+        reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
+    }
+
+    let startingPoint2 = {
+        name = "another component that requires a unique dependency";
+        links = [|Requires(dependency); Requires(dependency)|] |> noMetadata
+        serviceType = InternalService
+        reliabilityProfile = randomUptimeProfile 1.0
+        metadata = None
+    }
+
+    let mutable invocations = 0
+    let simpleLeafFromComponent (c: Component) =
+        invocations <- invocations + 1
+        { name = c.name; branches = [||] }
+
+    let simpleBranchFromLink (link: Link) (leaf: simpleTree) =
+        { branch = leaf }
+
+    let growTree leaf branches =
+        { leaf with branches = Array.concat([leaf.branches; branches]) }
+
+    Translations.translateMulti simpleLeafFromComponent simpleBranchFromLink growTree [|startingPoint1; startingPoint2|]
+    |> ignore
+
+    Assert.Equal(3, invocations)

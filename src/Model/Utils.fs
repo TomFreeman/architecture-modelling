@@ -1,15 +1,16 @@
 module Utils
 open System.Collections.Generic
 
-let memoize f =
-    let dict = Dictionary<_, _>()
+let memoize targetFunction =
+    let dict = Dictionary<int, _>()
 
-    fun c ->
-        let exist, value = dict.TryGetValue c
+    fun input ->
+        let hash = input.GetHashCode()
+        let exist, value = dict.TryGetValue hash
 
         match exist with
         | true -> value
         | _ ->
-            let value = f c
-            dict.Add(c, value)
+            let value = targetFunction input
+            dict.Add(hash, value)
             value

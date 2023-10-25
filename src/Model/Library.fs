@@ -79,11 +79,26 @@ type [<CustomEquality; CustomComparison>] Component = {
                 match other with
                 | :? Component as o -> this.name.CompareTo(o.name)
                 | _ -> 1
-type Link = {
+
+
+type [<CustomEquality; CustomComparison>] Link = {
     from: Component
     on: Component
     metadata: Map<string, string> option
-}
+} with
+        override this.Equals(other) =
+            match other with
+            | :? Link as o -> this.on = o.on && this.from = o.from
+            | _ -> false
+
+        override this.GetHashCode() =
+            this.on.GetHashCode() + this.from.GetHashCode()
+
+        interface System.IComparable with
+            override this.CompareTo(other) =
+                match other with
+                | :? Link as o -> this.on.name.CompareTo(o.on.name)
+                | _ -> 1
 
 let Dependencies = System.Collections.Generic.List<Link>()
 let ComprisedOf = System.Collections.Generic.List<Link>()

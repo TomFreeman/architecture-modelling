@@ -22,13 +22,11 @@ let translateMulti nodeTransformer linkTransformer starts =
         starts
         |> Seq.map nodeTranslator
 
-
     let links =
         starts
         |> Seq.map fetchAllLinks
         |> Seq.concat
-        |> Set.ofSeq
-        |> Set.toSeq
+        |> Seq.toArray
 
     let links' =
         links
@@ -36,6 +34,7 @@ let translateMulti nodeTransformer linkTransformer starts =
             let on' = nodeTranslator link.on
             let from' = nodeTranslator link.from
             linkTranslator link on' from')
+        |> Seq.toArray
 
     starts', links'
 
@@ -45,4 +44,27 @@ let translate nodeTransformer linkTransformer start =
 
     let start' = starts' |> Seq.head
     start', links'
+
+let rec debug component =
+
+    printf "%s (%A)" component.name component.serviceType
+
+    let dependencies = fetchDependencies component
+    if dependencies |> Seq.isEmpty |> not then
+        printfn "Requires:"
+        dependencies
+        |> Seq.iter (fun (link) -> (debug link.on))
+
+    let enhancements = fetchEnhancedBy component
+    if enhancements |> Seq.isEmpty |> not then
+        printfn "Enhanced by:"
+        enhancements
+        |> Seq.iter (fun (link) ->  (debug link.on))
+
+    let comprisedOf = fetchComprisedOf component
+    if comprisedOf |> Seq.isEmpty |> not then
+        printfn "Comprised of:"
+        comprisedOf
+        |> Seq.iter (fun (link) -> (debug link.on))
+
 

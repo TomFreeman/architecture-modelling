@@ -6,6 +6,14 @@ open NUnit.Framework
 open Model
 open Reliability.Patterns
 
+type simpleBranch = {
+    branch: simpleTree
+    }
+and simpleTree = {
+    name: string
+    branches: simpleBranch array
+}
+
 [<TestFixture>]
 type Tests() =
 
@@ -16,6 +24,13 @@ type Tests() =
             reliabilityProfile = randomUptimeProfile 1.0
             metadata = None
         }
+
+    [<SetUp>]
+    member this.Setup() =
+        Dependencies.Clear()
+        EnhancedBy.Clear()
+        ComprisedOf.Clear()
+        ResponsibleFor.Clear()
 
     [<Test>]
     member this.``Reliable services are always reliable`` () =
@@ -114,93 +129,87 @@ type Tests() =
         successes |> should be (greaterThanOrEqualTo minExpected)
         successes |> should be (lessThanOrEqualTo maxExpected)
 
-    // [<Test>]
-    // let ``Can generate large random architectures`` () =
-    //     let target = Examples.generateComplexArchitecture 3
+    [<Test>]
+    member this.``Can generate large random architectures`` () =
+        let target = Examples.generateComplexArchitecture 3
 
-    //     Assert.NotNull(target)
-    //     let successes, failures, degradations = determineServiceUptime 10 target.[0]
-    //     Assert.True (successes >= 0, sprintf "Expected at least one success %d successes, %d failures, %d degradations" successes failures degradations)
+        Assert.NotNull(target)
+        let successes, failures, degradations = determineServiceUptime 10 target.[0]
+        Assert.True (successes >= 0, sprintf "Expected at least one success %d successes, %d failures, %d degradations" successes failures degradations)
 
-    // type simpleBranch = {
-    //     branch: simpleTree
-    //     }
-    // and simpleTree = {
-    //     name: string
-    //     branches: simpleBranch array
-    // }
+    [<Test>]
+    member this. ``Can translate an architecture into something simpler`` () =
+        let startingPoint = {
+            name = "my architecture"
+            serviceType = InternalService
+            reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        }
 
-    // [<Test>]
-    // let ``Can translate an architecture into something simpler`` () =
-    //     let startingPoint = {
-    //         name = "my architecture"
-    //         links = [|Requires({
-    //             name = "a totally reliable service";
-    //             links = [||]; serviceType = InternalService; reliabilityProfile = randomUptimeProfile 1.0
-    //             metadata = None
-    //         })|] |> noMetadata
-    //         serviceType = InternalService
-    //         reliabilityProfile = randomUptimeProfile 1.0
-    //         metadata = None
-    //     }
+        startingPoint |> dependsOn ``a totally reliable service``
 
-    //     let simpleLeafFromComponent (c: Component) =
-    //         { name = c.name; branches = [||] }
+        let simpleLeafFromComponent (c: Component) =
+            { name = c.name; branches = [||] }
 
-    //     let simpleBranchFromLink (link: Link) (leaf: simpleTree) =
-    //         { branch = leaf }
+        let simpleBranchFromLink (link: Link) branch trunk  =
+            let branch = {
+                branch = branch
+            }
+            trunk.branches |> Array.append [|branch|]
 
-    //     let growTree leaf branches =
-    //         { leaf with branches = Array.concat([leaf.branches; branches]) }
+        let output, branches = Translations.translate simpleLeafFromComponent simpleBranchFromLink startingPoint
 
-    //     let output = Translations.translate simpleLeafFromComponent simpleBranchFromLink growTree startingPoint
+        output |> should not' (be null)
 
-    //     Assert.NotNull(output)
-    //     Assert.StrictEqual("my architecture", output.name)
-    //     Assert.Equal(1, output.branches.Length)
-    //     Assert.Equal("a totally reliable service", output.branches.[0].branch.name)
+        output.name |> should equal "my architecture"
 
-    // [<Test>]
-    // let ``Can translate an architecture into something simpler starting from multiple entry points`` () =
-    //     let startingPoint1 = {
-    //         name = "Entry point 1"
-    //         links = [|Requires({
-    //             name = "a totally reliable service";
-    //             links = [||]; serviceType = InternalService; reliabilityProfile = randomUptimeProfile 1.0
-    //             metadata = None
-    //         })|] |> noMetadata
-    //         serviceType = InternalService
-    //         reliabilityProfile = randomUptimeProfile 1.0
-    //         metadata = None
-    //     }
+        branches |> should not' (be null)
+        branches |> Seq.length |> should equal 1
+        let first = branches |> Seq.head |> Array.head
+        first.branch.name |> should equal "a totally reliable service"
 
-    //     let startingPoint2 = {
-    //         name = "Entry point 2"
-    //         links = [|Requires({
-    //             name = "a totally reliable service";
-    //             links = [||]; serviceType = InternalService; reliabilityProfile = randomUptimeProfile 1.0
-    //             metadata = None
-    //         })|] |> noMetadata
-    //         serviceType = InternalService
-    //         reliabilityProfile = randomUptimeProfile 1.0
-    //         metadata = None
-    //     }
+    [<Test>]
+    member this. ``Can translate an architecture into something simpler starting from multiple entry points`` () =
+        let ``reliable`` = {
+            name = "a totally reliable service"
+            serviceType = InternalService
+            reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        }
 
-    //     let simpleLeafFromComponent (c: Component) =
-    //         { name = c.name; branches = [||] }
+        let startingPoint1 = {
+            name = "Entry point 1"
+            serviceType = InternalService
+            reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        }
 
-    //     let simpleBranchFromLink (link: Link) (leaf: simpleTree) =
-    //         { branch = leaf }
+        let startingPoint2 = {
+            name = "Entry point 2"
+            serviceType = InternalService
+            reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        }
 
-    //     let growTree leaf branches =
-    //         { leaf with branches = Array.concat([leaf.branches; branches]) }
+        startingPoint1 |> dependsOn ``reliable``
+        startingPoint2 |> dependsOn ``reliable``
 
-    //     let output = Translations.translateMulti simpleLeafFromComponent simpleBranchFromLink growTree [|startingPoint1; startingPoint2|]
+        let simpleLeafFromComponent (c: Component) =
+            { name = c.name; branches = [||] }
 
-    //     Assert.NotNull(output)
-    //     Assert.Equal(output.Length, 2)
-    //     Assert.StrictEqual("Entry point 1", output.[0].name)
-    //     Assert.StrictEqual("Entry point 2", output.[1].name)
+        let simpleBranchFromLink (link: Link) branch trunk  =
+            let branch = {
+                branch = branch
+            }
+            trunk.branches |> Array.append [|branch|]
+        let output, branches = Translations.translateMulti simpleLeafFromComponent simpleBranchFromLink [|startingPoint1; startingPoint2|]
+
+        output |> should not' (be null)
+
+        branches |> Seq.length |> should equal 2
+        let outArray = output |> Seq.toArray
+        outArray.[0].name |> should equal "Entry point 1"
+        outArray.[1].name |> should equal "Entry point 2"
 
     [<Test>]
     member this.``Equality Comparison works`` () =
@@ -256,78 +265,84 @@ type Tests() =
         Assert.True(targetMap.ContainsKey(b))
         Assert.False(targetMap.ContainsKey(c))
 
-    // [<Test>]
-    // let ``Stores only unique components in the translated cache`` () =
-    //     let dependency = {
-    //             name = "a unique dependency";
-    //             serviceType = InternalService;
-    //             reliabilityProfile = randomUptimeProfile 1.0
-    //             metadata = None
-    //         }
+    [<Test>]
+    member this. ``Stores only unique components in the translated cache`` () =
+        let dependency = {
+                name = "a unique dependency";
+                serviceType = InternalService;
+                reliabilityProfile = randomUptimeProfile 1.0
+                metadata = None
+            }
 
-    //     let startingPoint = {
-    //         name = "a component that requires a unique dependency";
-    //         serviceType = InternalService
-    //         reliabilityProfile = randomUptimeProfile 1.0
-    //         metadata = None
-    //     }
+        let startingPoint = {
+            name = "a component that requires a unique dependency";
+            serviceType = InternalService
+            reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        }
 
-    //     startingPoint |> dependsOn dependency
-    //     startingPoint |> dependsOn dependency
+        startingPoint |> dependsOn dependency
+        startingPoint |> comprisedOf dependency
 
-    //     let mutable invocations = 0
-    //     let simpleLeafFromComponent (c: Component) =
-    //         invocations <- invocations + 1
-    //         { name = c.name; branches = [||] }
+        let mutable invocations = 0
+        let simpleLeafFromComponent (c: Component) =
+            invocations <- invocations + 1
+            { name = c.name; branches = [||] }
 
-    //     let simpleBranchFromLink (link: Link) (leaf: simpleTree) =
-    //         { branch = leaf }
+        let simpleBranchFromLink (link: Link) branch trunk  =
+            let branch = {
+                branch = branch
+            }
+            trunk.branches |> Array.append [|branch|]
 
-    //     let growTree leaf branches =
-    //         { leaf with branches = Array.concat([leaf.branches; branches]) }
+        let output, branches = Translations.translate simpleLeafFromComponent simpleBranchFromLink startingPoint
 
-    //     let output = Translations.translate simpleLeafFromComponent simpleBranchFromLink growTree startingPoint
+        // Laziness and using mutables do not mix well, force the issue
+        let bs = branches |> Seq.toArray
+        invocations |> should equal 2
 
-    //     Assert.Equal(2, invocations)
+    [<Test>]
+    member this. ``Translate multi translates each node once`` () =
+        let dependency = {
+                name = "a unique dependency";
+                serviceType = InternalService;
+                reliabilityProfile = randomUptimeProfile 1.0
+                metadata = None
+            }
 
-    // [<Test>]
-    // let ``Translate multi translates each node once`` () =
-    //     let dependency = {
-    //             name = "a unique dependency";
-    //             links = [||];
-    //             serviceType = InternalService;
-    //             reliabilityProfile = randomUptimeProfile 1.0
-    //             metadata = None
-    //         }
+        let startingPoint1 = {
+            name = "a component that requires a unique dependency";
+            serviceType = InternalService
+            reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        }
 
-    //     let startingPoint1 = {
-    //         name = "a component that requires a unique dependency";
-    //         links = [|Requires(dependency); Requires(dependency)|] |> noMetadata
-    //         serviceType = InternalService
-    //         reliabilityProfile = randomUptimeProfile 1.0
-    //         metadata = None
-    //     }
+        startingPoint1 |> dependsOn dependency
+        startingPoint1 |> comprisedOf dependency
 
-    //     let startingPoint2 = {
-    //         name = "another component that requires a unique dependency";
-    //         links = [|Requires(dependency); Requires(dependency)|] |> noMetadata
-    //         serviceType = InternalService
-    //         reliabilityProfile = randomUptimeProfile 1.0
-    //         metadata = None
-    //     }
+        let startingPoint2 = {
+            name = "another component that requires a unique dependency";
+            serviceType = InternalService
+            reliabilityProfile = randomUptimeProfile 1.0
+            metadata = None
+        }
 
-    //     let mutable invocations = 0
-    //     let simpleLeafFromComponent (c: Component) =
-    //         invocations <- invocations + 1
-    //         { name = c.name; branches = [||] }
+        startingPoint2 |> dependsOn dependency
+        startingPoint2 |> comprisedOf dependency
 
-    //     let simpleBranchFromLink (link: Link) (leaf: simpleTree) =
-    //         { branch = leaf }
+        let mutable invocations = 0
+        let simpleLeafFromComponent (c: Component) =
+            invocations <- invocations + 1
+            { name = c.name; branches = [||] }
 
-    //     let growTree leaf branches =
-    //         { leaf with branches = Array.concat([leaf.branches; branches]) }
+        let simpleBranchFromLink (link: Link) branch trunk  =
+            let branch = {
+                branch = branch
+            }
+            trunk.branches |> Array.append [|branch|]
 
-    //     Translations.translateMulti simpleLeafFromComponent simpleBranchFromLink growTree [|startingPoint1; startingPoint2|]
-    //     |> ignore
+        let outputs, branches = Translations.translateMulti simpleLeafFromComponent simpleBranchFromLink [|startingPoint1; startingPoint2|]
 
-    //     Assert.Equal(3, invocations)
+        // Laziness and using mutables do not mix well, force the issue
+        let bs = branches |> Seq.toArray
+        invocations |> should equal 3

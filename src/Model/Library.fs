@@ -65,10 +65,14 @@ type [<CustomEquality; CustomComparison>] Component = {
             | _ -> false
 
         override this.GetHashCode() =
-            this.name.GetHashCode() +
-            this.serviceType.GetHashCode() +
-            this.reliabilityProfile.GetHashCode() +
-            this.metadata.GetHashCode()
+            let hash =this.name.GetHashCode() +
+                        this.serviceType.GetHashCode() +
+                        this.reliabilityProfile.GetHashCode()
+
+            if this.metadata = None then
+                hash
+            else
+                hash + this.metadata.GetHashCode()
 
         interface System.IComparable with
             override this.CompareTo(other) =

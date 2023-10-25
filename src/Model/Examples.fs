@@ -13,17 +13,26 @@ let generateComplexArchitecture levels =
             let name = sprintf "node %d" i
             let serviceType = if rand.NextDouble() > 0.5 then ExternalService else InternalService
             let reliabilityProfile = randomUptimeProfile (rand.NextDouble() * 0.5 + 0.5)
-            let links =
-                possibleLinks
-                |> List.filter (fun (j) -> rand.Next(3) = 0)
-                |> List.map (fun (link) ->
-                    if rand.NextDouble() > 0.5 then Requires(link |> mitigatedBy (retrying 5)) else BenefitsFrom(link))
-                |> List.map (fun (link) -> {relationship=link; metadata=None})
-                |> List.toArray
-            {name = name; links = links; serviceType = serviceType; reliabilityProfile = reliabilityProfile; metadata = None})
 
-    [0..levels]
-    |> List.fold (fun acc level ->
-        let newNodes = generateLevel acc
-        newNodes @ acc) []
-    |> List.find (fun (node) -> node.links.Length > 0)
+            {name = name; serviceType = serviceType; reliabilityProfile = reliabilityProfile; metadata = None})
+
+    let components =
+        [0..levels]
+        |> List.map generateLevel
+
+    // Randomly link nodes from each level to nodes from the next level
+    for i in [0..levels - 1] do
+        let currentLevel = components.[i]
+        let nextLevel = components.[i + 1]
+
+        for node in currentLevel do
+            let links = rand.Next(0, 3)
+            for i in [0..links] do
+                let target = nextLevel |> List.item (rand.Next(0, nextLevel.Length))
+
+                match rand.Next(1, 3) with
+                | 1 -> node >=> target
+                | 2 -> node >-> target
+                | _ -> node >!> target
+
+    List.concat components

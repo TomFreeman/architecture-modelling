@@ -135,7 +135,7 @@ type Tests() =
 
         Assert.NotNull(target)
         let successes, failures, degradations = determineServiceUptime 10 target.[0]
-        Assert.True (successes >= 0, sprintf "Expected at least one success %d successes, %d failures, %d degradations" successes failures degradations)
+        Assert.That (successes >= 0, sprintf "Expected at least one success %d successes, %d failures, %d degradations" successes failures degradations)
 
     [<Test>]
     member this. ``Can translate an architecture into something simpler`` () =
@@ -261,9 +261,9 @@ type Tests() =
         }
 
         let targetMap = Map<_,_>([a, 1])
-        Assert.True(targetMap.ContainsKey(a))
-        Assert.True(targetMap.ContainsKey(b))
-        Assert.False(targetMap.ContainsKey(c))
+        Assert.That(targetMap.ContainsKey(a))
+        Assert.That(targetMap.ContainsKey(b))
+        Assert.Equals(targetMap.ContainsKey(c), false)
 
     [<Test>]
     member this. ``Stores only unique components in the translated cache`` () =

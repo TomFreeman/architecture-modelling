@@ -1,0 +1,10 @@
+source https://api.nuget.org/v3/index.json
+
+storage: none
+nuget coverlet.collector
+nuget Fable.Core
+nuget FSharp.Core
+nuget FsUnit
+nuget Microsoft.NET.Test.Sdk
+nuget nunit
+nuget nunit3testadapter

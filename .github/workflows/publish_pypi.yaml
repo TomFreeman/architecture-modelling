@@ -15,7 +15,8 @@ jobs:
     steps:
       - name: Install Fable tooling
         run: |
-          dotnet tool install --global fable --version 4.0.0-snake-island-alpha-024
+          dotnet tool install --global fable
+          dotnet tool install --global paket
           python3 -m pip install --upgrade build
 
       - name: Checkout

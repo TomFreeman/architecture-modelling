@@ -9,9 +9,10 @@ RUN groupadd jovyan \
 USER jovyan
 
 RUN curl -L https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh \
-    && ./dotnet-install.sh \
+    && chmod +x ./dotnet-install.sh \
+    && ./dotnet-install.sh
 
-ENV PATH="$PATH:~/.dotnet/"
+ENV PATH="$PATH:~/.dotnet"
 
-RUN dotnet tool install fable \
-    && dotnet tool install paket
+RUN dotnet tool install fable --global \
+    && dotnet tool install paket --global

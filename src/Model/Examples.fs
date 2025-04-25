@@ -2,7 +2,7 @@ module Examples
 open Model
 open Reliability.Patterns
 
-// Helper method to generate complex architectures for testing and demonstrations
+// Helper method to generate complex architectures for testing and demonstration
 let generateComplexArchitecture levels =
     let rand = System.Random()
     let maxNodesAtLevel = 10

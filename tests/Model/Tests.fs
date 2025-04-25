@@ -11,12 +11,11 @@ type simpleBranch = {
     }
 and simpleTree = {
     name: string
-    branches: simpleBranch array
+    mutable branches: simpleBranch array
 }
 
 [<TestFixture>]
 type Tests() =
-
     let ``a totally reliable service`` =
         {
             name = "a totally reliable service"
@@ -25,16 +24,10 @@ type Tests() =
             metadata = None
         }
 
-    [<SetUp>]
-    member this.Setup() =
-        Dependencies.Clear()
-        EnhancedBy.Clear()
-        ComprisedOf.Clear()
-        ResponsibleFor.Clear()
-
     [<Test>]
     member this.``Reliable services are always reliable`` () =
-        let profile = fetchReliabilityProfile ``a totally reliable service``
+        let arch = Model()
+        let profile = arch.fetchReliabilityProfile ``a totally reliable service``
 
         let result = profile.works()
 
@@ -44,6 +37,7 @@ type Tests() =
     [<TestCase(0.90, 1000, 880, 920)>]
     [<TestCase(0.50, 1000, 475, 525)>]
     member this. ``Unreliable Services are accurately unreliable`` (uptime, iterations, minExpected, maxExpected) =
+        let arch = Model()
         let ``unreliable service`` = {
             name = "an unreliable service"
             serviceType = InternalService
@@ -51,7 +45,7 @@ type Tests() =
             metadata = None
         }
 
-        let successes, _, _ = determineServiceUptime iterations ``unreliable service``
+        let successes, _, _ = arch.determineServiceUptime iterations ``unreliable service``
 
         successes |> should be (greaterThanOrEqualTo minExpected)
         successes |> should be (lessThanOrEqualTo maxExpected)
@@ -60,6 +54,7 @@ type Tests() =
     [<TestCase(0.90, 1000, 875, 925)>]
     [<TestCase(0.50, 1000, 480, 520)>]
     member this. ``Unreliable dependencies make your architecture unreliable`` (uptime, iterations, minExpected, maxExpected) =
+        let arch = Model()
         let ``unreliable service`` = {
             name = "an unreliable service"
             serviceType = InternalService
@@ -74,7 +69,7 @@ type Tests() =
             metadata = None
         }
 
-        let successes, _, _ = determineServiceUptime iterations ``unreliable service``
+        let successes, _, _ = arch.determineServiceUptime iterations ``unreliable service``
 
         successes |> should be (greaterThanOrEqualTo minExpected)
         successes |> should be (lessThanOrEqualTo maxExpected)
@@ -84,6 +79,7 @@ type Tests() =
     [<TestCase(0.90, 1000)>]
     [<TestCase(0.50, 1000)>]
     member this.``Unreliable optional dependencies cause degradations not failures`` (uptime, iterations) =
+        let arch = Model()
         let ``my architecture`` = {
             name = "my architecture"
             serviceType = InternalService
@@ -98,7 +94,7 @@ type Tests() =
             metadata = None
         }
 
-        let _, failures, _ = determineServiceUptime iterations ``my architecture``
+        let _, failures, _ = arch.determineServiceUptime iterations ``my architecture``
 
         failures |> should equal 0
 
@@ -107,6 +103,7 @@ type Tests() =
     [<TestCase(0.90, 1000, 950, 1000)>]
     [<TestCase(0.50, 1000, 850, 1000)>]
     member this.``Retrying Unreliable Services improve reliability`` (uptime, iterations, minExpected, maxExpected) =
+        let arch = Model()
         let ``unreliable service`` = {
             name = "an unreliable service"
             serviceType = InternalService
@@ -121,24 +118,26 @@ type Tests() =
             metadata = None
         }
 
-        ``my architecture`` |> dependsOn (``unreliable service`` |> mitigatedBy (retrying 3))
+        ``my architecture`` |> arch.dependsOn (``unreliable service`` |> mitigatedBy (retrying 3))
 
 
-        let successes, _, _ = determineServiceUptime iterations ``my architecture``
+        let successes, _, _ = arch.determineServiceUptime iterations ``my architecture``
 
         successes |> should be (greaterThanOrEqualTo minExpected)
         successes |> should be (lessThanOrEqualTo maxExpected)
 
     [<Test>]
     member this.``Can generate large random architectures`` () =
+        let arch = Model()
         let target = Examples.generateComplexArchitecture 3
 
         Assert.NotNull(target)
-        let successes, failures, degradations = determineServiceUptime 10 target.[0]
+        let successes, failures, degradations = arch.determineServiceUptime 10 target.[0]
         Assert.That (successes >= 0, sprintf "Expected at least one success %d successes, %d failures, %d degradations" successes failures degradations)
 
     [<Test>]
     member this. ``Can translate an architecture into something simpler`` () =
+        let arch = Model()
         let startingPoint = {
             name = "my architecture"
             serviceType = InternalService
@@ -146,30 +145,33 @@ type Tests() =
             metadata = None
         }
 
-        startingPoint |> dependsOn ``a totally reliable service``
+        startingPoint |> arch.dependsOn ``a totally reliable service``
 
         let simpleLeafFromComponent (c: Component) =
             { name = c.name; branches = [||] }
 
-        let simpleBranchFromLink (link: Link) branch trunk  =
+        let simpleBranchFromLink (link: Link) trunk branch  =
             let branch = {
                 branch = branch
             }
-            trunk.branches |> Array.append [|branch|]
+            trunk.branches <- trunk.branches |> Array.append [|branch|]
 
-        let output, branches = Translations.translate simpleLeafFromComponent simpleBranchFromLink startingPoint
+        let output =
+            Translations.traverse arch simpleLeafFromComponent simpleBranchFromLink [|startingPoint|]
+            |> Seq.head // We only passed one root, so we should only have one in the translated model
 
         output |> should not' (be null)
 
         output.name |> should equal "my architecture"
 
-        branches |> should not' (be null)
-        branches |> Seq.length |> should equal 1
-        let first = branches |> Seq.head |> Array.head
+        output.branches |> should not' (be null)
+        output.branches |> Seq.length |> should equal 1
+        let first = output.branches |> Seq.head
         first.branch.name |> should equal "a totally reliable service"
 
     [<Test>]
     member this. ``Can translate an architecture into something simpler starting from multiple entry points`` () =
+        let arch = Model()
         let ``reliable`` = {
             name = "a totally reliable service"
             serviceType = InternalService
@@ -191,8 +193,10 @@ type Tests() =
             metadata = None
         }
 
-        startingPoint1 |> dependsOn ``reliable``
-        startingPoint2 |> dependsOn ``reliable``
+        startingPoint1 |> arch.dependsOn ``reliable``
+        startingPoint2 |> arch.dependsOn ``reliable``
+
+        let mutable branches = [||]
 
         let simpleLeafFromComponent (c: Component) =
             { name = c.name; branches = [||] }
@@ -201,8 +205,11 @@ type Tests() =
             let branch = {
                 branch = branch
             }
-            trunk.branches |> Array.append [|branch|]
-        let output, branches = Translations.translateMulti simpleLeafFromComponent simpleBranchFromLink [|startingPoint1; startingPoint2|]
+            trunk.branches <- trunk.branches |> Array.append [|branch|]
+            branches <- branches |> Array.append [|branch|]
+
+        let output = Translations.traverse arch simpleLeafFromComponent simpleBranchFromLink [|startingPoint1; startingPoint2|]
+                                        |> Seq.toArray
 
         output |> should not' (be null)
 
@@ -263,10 +270,11 @@ type Tests() =
         let targetMap = Map<_,_>([a, 1])
         Assert.That(targetMap.ContainsKey(a))
         Assert.That(targetMap.ContainsKey(b))
-        Assert.Equals(targetMap.ContainsKey(c), false)
+        targetMap.ContainsKey(c) |> should equal false
 
     [<Test>]
     member this. ``Stores only unique components in the translated cache`` () =
+        let arch = Model()
         let dependency = {
                 name = "a unique dependency";
                 serviceType = InternalService;
@@ -281,10 +289,11 @@ type Tests() =
             metadata = None
         }
 
-        startingPoint |> dependsOn dependency
-        startingPoint |> comprisedOf dependency
+        startingPoint |> arch.dependsOn dependency
+        startingPoint |> arch.comprisedOf dependency
 
         let mutable invocations = 0
+        let mutable branches = [||]
         let simpleLeafFromComponent (c: Component) =
             invocations <- invocations + 1
             { name = c.name; branches = [||] }
@@ -293,9 +302,11 @@ type Tests() =
             let branch = {
                 branch = branch
             }
-            trunk.branches |> Array.append [|branch|]
+            branches <- branches |> Array.append [|branch|]
 
-        let output, branches = Translations.translate simpleLeafFromComponent simpleBranchFromLink startingPoint
+
+        Translations.traverse arch simpleLeafFromComponent simpleBranchFromLink [|startingPoint|]
+        |> Seq.iter ignore
 
         // Laziness and using mutables do not mix well, force the issue
         let bs = branches |> Seq.toArray
@@ -303,6 +314,7 @@ type Tests() =
 
     [<Test>]
     member this. ``Translate multi translates each node once`` () =
+        let arch = Model()
         let dependency = {
                 name = "a unique dependency";
                 serviceType = InternalService;
@@ -317,8 +329,8 @@ type Tests() =
             metadata = None
         }
 
-        startingPoint1 |> dependsOn dependency
-        startingPoint1 |> comprisedOf dependency
+        startingPoint1 |> arch.dependsOn dependency
+        startingPoint1 |> arch.comprisedOf dependency
 
         let startingPoint2 = {
             name = "another component that requires a unique dependency";
@@ -327,9 +339,10 @@ type Tests() =
             metadata = None
         }
 
-        startingPoint2 |> dependsOn dependency
-        startingPoint2 |> comprisedOf dependency
+        startingPoint2 |> arch.dependsOn dependency
+        startingPoint2 |> arch.comprisedOf dependency
 
+        let mutable branches = [||]
         let mutable invocations = 0
         let simpleLeafFromComponent (c: Component) =
             invocations <- invocations + 1
@@ -339,10 +352,10 @@ type Tests() =
             let branch = {
                 branch = branch
             }
-            trunk.branches |> Array.append [|branch|]
+            branches <- branches |> Array.append [|branch|]
 
-        let outputs, branches = Translations.translateMulti simpleLeafFromComponent simpleBranchFromLink [|startingPoint1; startingPoint2|]
+        let outputs = Translations.traverse arch simpleLeafFromComponent simpleBranchFromLink [|startingPoint1; startingPoint2|]
+                                      |> Seq.toArray // Laziness and using mutables do not mix well, force the issue
 
-        // Laziness and using mutables do not mix well, force the issue
         let bs = branches |> Seq.toArray
         invocations |> should equal 3

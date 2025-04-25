@@ -3,10 +3,10 @@ module Translations
 open Model
 open Utils
 
-let fetchAllLinks start =
-    let components = fetchComprisedOf start
-    let requirements = fetchDependencies start
-    let enhancements = fetchEnhancedBy start
+let fetchAllLinks (model: Model) start =
+    let components = model.fetchComprisedOf start
+    let requirements = model.fetchDependencies start
+    let enhancements = model.fetchEnhancedBy start
 
     requirements
     |> Seq.append enhancements
@@ -14,57 +14,46 @@ let fetchAllLinks start =
     |> Set.ofSeq
     |> Set.toSeq
 
-let translateMulti nodeTransformer linkTransformer starts =
-    let nodeTranslator = memoize nodeTransformer
-    let linkTranslator = memoize linkTransformer
+let traverse model visitNode visitLink starts =
+    let nodeTranslator = memoize visitNode
+    let linkTranslator = memoize visitLink
 
-    let starts' =
-        starts
-        |> Seq.map nodeTranslator
+    let rec visit node =
 
-    let links =
-        starts
-        |> Seq.map fetchAllLinks
-        |> Seq.concat
-        |> Seq.toArray
+        // We do return the starting nodes as a convenience, for folks who want their starting node(s) to be
+        // the new root node(s)
+        let parent = nodeTranslator node
 
-    let links' =
-        links
-        |> Seq.map (fun link ->
-            let on' = nodeTranslator link.on
-            let from' = nodeTranslator link.from
-            linkTranslator link on' from')
-        |> Seq.toArray
+        (fetchAllLinks model node)
+        |> Seq.map (fun n ->
+            linkTranslator n parent (visit n.on))
+        |> Seq.iter ignore // We don't know what structure you want to hold your new stuff in, so you need to keep track yourself
 
-    starts', links'
+        parent
 
-let translate nodeTransformer linkTransformer start =
+    starts
+    |> Seq.map visit
 
-    let starts', links' = translateMulti nodeTransformer linkTransformer (Seq.singleton start)
-
-    let start' = starts' |> Seq.head
-    start', links'
-
-let rec debug component =
+let rec debug (model:Model) component =
 
     printf "%s (%A)" component.name component.serviceType
 
-    let dependencies = fetchDependencies component
+    let dependencies = model.fetchDependencies component
     if dependencies |> Seq.isEmpty |> not then
         printfn "Requires:"
         dependencies
-        |> Seq.iter (fun (link) -> (debug link.on))
+        |> Seq.iter (fun (link) -> (debug model link.on))
 
-    let enhancements = fetchEnhancedBy component
+    let enhancements = model.fetchEnhancedBy component
     if enhancements |> Seq.isEmpty |> not then
         printfn "Enhanced by:"
         enhancements
-        |> Seq.iter (fun (link) ->  (debug link.on))
+        |> Seq.iter (fun (link) ->  (debug model link.on))
 
-    let comprisedOf = fetchComprisedOf component
+    let comprisedOf = model.fetchComprisedOf component
     if comprisedOf |> Seq.isEmpty |> not then
         printfn "Comprised of:"
         comprisedOf
-        |> Seq.iter (fun (link) -> (debug link.on))
+        |> Seq.iter (fun (link) -> (debug model link.on))
 
 

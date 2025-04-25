@@ -6,6 +6,7 @@ open Reliability.Patterns
 let generateComplexArchitecture levels =
     let rand = System.Random()
     let maxNodesAtLevel = 10
+    let architecture = Model()
 
     let generateLevel possibleLinks =
         [0..maxNodesAtLevel]
@@ -31,8 +32,8 @@ let generateComplexArchitecture levels =
                 let target = nextLevel |> List.item (rand.Next(0, nextLevel.Length))
 
                 match rand.Next(1, 3) with
-                | 1 -> node >=> target
-                | 2 -> node >-> target
-                | _ -> node >!> target
+                | 1 -> architecture.comprisedOf node target
+                | 2 -> architecture.enhancedBy node target
+                | _ -> architecture.dependsOn node target
 
     List.concat components

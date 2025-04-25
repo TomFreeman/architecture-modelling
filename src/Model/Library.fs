@@ -1,5 +1,6 @@
 ﻿module Model
 open System
+open System.Collections.Generic
 
 type UnitType =
     | ExternalService
@@ -82,17 +83,16 @@ type [<CustomEquality; CustomComparison>] Component = {
 
 
 type [<CustomEquality; CustomComparison>] Link = {
-    from: Component
     on: Component
     metadata: Map<string, string> option
 } with
         override this.Equals(other) =
             match other with
-            | :? Link as o -> this.on = o.on && this.from = o.from
+            | :? Link as o -> this.on = o.on
             | _ -> false
 
         override this.GetHashCode() =
-            this.on.GetHashCode() + this.from.GetHashCode()
+            this.on.GetHashCode()
 
         interface System.IComparable with
             override this.CompareTo(other) =
@@ -100,31 +100,126 @@ type [<CustomEquality; CustomComparison>] Link = {
                 | :? Link as o -> this.on.name.CompareTo(o.on.name)
                 | _ -> 1
 
-let Dependencies = System.Collections.Generic.List<Link>()
-let ComprisedOf = System.Collections.Generic.List<Link>()
-let EnhancedBy = System.Collections.Generic.List<Link>()
-let ResponsibleFor = System.Collections.Generic.List<Link>()
+let worstOf (serviceLevel1, serviceLevel2) =
+    match serviceLevel1, serviceLevel2 with
+    | Working(x), Working(y) -> if x > y then Working(x) else Working(y)
+    | Working(x), Degraded(y) -> Degraded(y)
+    | _, Unavailable(y) -> Unavailable(y)
+    | Degraded(x), Working(y) -> Degraded(x)
+    | Degraded(x), Degraded(y) -> if x > y then Degraded(x) else Degraded(y)
+    | Unavailable(x), _ -> Unavailable(x)
 
-let dependsOn on from =
-    Dependencies.Add { from = from; on = on; metadata = None }
+let linksOrDefault (collection: Dictionary<'a, List<'b>>) item =
+    if collection.ContainsKey(item) then
+        collection[item]
+    else
+        List<'b>()
+
+type Model() =
+    class
+        let Dependencies = Dictionary<Component, List<Link>>()
+        let ComprisedOf = Dictionary<Component, List<Link>>()
+        let EnhancedBy = Dictionary<Component, List<Link>>()
+        let ResponsibleFor = Dictionary<Component, List<Link>>()
+
+        member this.dependsOn on from =
+            if Dependencies.ContainsKey(from) then
+                Dependencies[from].Add({on = on; metadata = None })
+            else
+                Dependencies.Add(from, new List<Link>([{on = on; metadata = None}]))
+
+
+        member this.comprisedOf on from =
+            if ComprisedOf.ContainsKey(from) then
+                ComprisedOf[from].Add({on = on; metadata = None })
+            else
+                ComprisedOf.Add(from, new List<Link>([{on = on; metadata = None}]))
+
+
+        member this.enhancedBy on from =
+            if EnhancedBy.ContainsKey(from) then
+                EnhancedBy[from].Add({on = on; metadata = None })
+            else
+                EnhancedBy.Add(from, new List<Link>([{on = on; metadata = None}]))
+
+        member this.responsibleFor on from =
+            if ResponsibleFor.ContainsKey(from) then
+                ResponsibleFor[from].Add({on = on; metadata = None })
+            else
+                ResponsibleFor.Add(from, new List<Link>([{on = on; metadata = None}]))
+
+
+        member this.fetchDependencies service =
+            linksOrDefault Dependencies service
+
+        member this.fetchComprisedOf service =
+            linksOrDefault ComprisedOf service
+
+        member this.fetchEnhancedBy service =
+            linksOrDefault EnhancedBy service
+
+        member this.fetchResponsibleFor service =
+            linksOrDefault ResponsibleFor service
+
+        member this.fetchReliabilityProfile service =
+            let required = this.fetchDependencies service
+            let enhancements = this.fetchEnhancedBy service
+            let comprisedOf = this.fetchComprisedOf service
+
+            let requiredProfiles =
+                required
+                |> Seq.append comprisedOf
+                |> Seq.map (fun (link) -> link.on)
+                |> Seq.map this.fetchReliabilityProfile
+                |> Seq.toList
+
+            let optionalProfiles =
+                enhancements
+                |> Seq.map (fun (link) -> link.on)
+                |> Seq.map this.fetchReliabilityProfile
+                |> Seq.toList
+
+
+            // memoize this as we'll end up visiting it twice as we check required and optional services
+            let rec attempt serviceResult required profiles =
+                match profiles with
+                | [] -> serviceResult
+                | profile :: rest ->
+                    match profile.works() with
+                    | Working(x) -> worstOf(attempt serviceResult required rest, Working(x))
+                    | Degraded(x) -> worstOf(attempt serviceResult required rest, Degraded(x))
+                    | Unavailable(x) -> if required then
+                                            Unavailable(x)
+                                        else
+                                            worstOf(attempt serviceResult required rest, Degraded(x))
+
+            {
+                shorthand = service.reliabilityProfile.shorthand
+                works = fun () ->
+                    let serviceResult = service.reliabilityProfile.works()
+                    worstOf(attempt serviceResult true requiredProfiles, attempt serviceResult false optionalProfiles)
+            }
+
+            member this.determineServiceUptime count service =
+                let profile = this.fetchReliabilityProfile service
+
+                [1 .. count]
+                |> List.map (fun _ -> profile.works())
+                |> List.fold (fun (successes, failures, degradations) result ->
+                    match result with
+                    | Unavailable(_) -> successes, failures + 1, degradations
+                    | Working(_) -> successes + 1, failures, degradations
+                    | Degraded(_) -> successes, failures, degradations + 1) (0, 0, 0)
+    end
+
+let defaultArchitecture = Model()
 
 let (>!>) on from =
-    from |> dependsOn on
+    from |> defaultArchitecture.dependsOn on
 
-let comprisedOf on from =
-    ComprisedOf.Add { from = from; on = on; metadata = None }
-
-let (>=>) from on = from |> comprisedOf on
-
-let enhancedBy on from =
-    EnhancedBy.Add { from = from; on = on; metadata = None }
-
-let (>->) from on = from |> enhancedBy on
-
-let responsibleFor on from =
-    ResponsibleFor.Add { from = from; on = on; metadata = None }
-
-let (>~>) from on = from |> responsibleFor on
+let (>->) from on = from |> defaultArchitecture.enhancedBy on
+let (>~>) from on = from |> defaultArchitecture.responsibleFor on
+let (>=>) from on = from |> defaultArchitecture.comprisedOf on
 
 let plain link: Link =
     { link with metadata = None }
@@ -152,77 +247,4 @@ let buildTeam teamname names metadata =
     team
 
 let mitigatedBy strategy (service: Component) =
-    {service with reliabilityProfile = strategy(service.reliabilityProfile)}
-
-let fetchDependencies (service: Component) =
-    Dependencies
-    |> noMetadata
-    |> Seq.filter (fun (link) -> link.from = service)
-
-let fetchComprisedOf (service: Component) =
-    ComprisedOf
-    |> noMetadata
-    |> Seq.filter (fun (link) -> link.from = service)
-
-let fetchEnhancedBy (service: Component) =
-    EnhancedBy
-    |> noMetadata
-    |> Seq.filter (fun (link) -> link.from = service)
-
-let rec fetchReliabilityProfile service =
-    let required = fetchDependencies service
-    let enhancements = fetchEnhancedBy service
-    let comprisedOf = fetchComprisedOf service
-
-    let requiredProfiles =
-        required
-        |> Seq.append comprisedOf
-        |> Seq.map (fun (link) -> link.on)
-        |> Seq.map fetchReliabilityProfile
-        |> Seq.toList
-
-    let optionalProfiles =
-        enhancements
-        |> Seq.map (fun (link) -> link.on)
-        |> Seq.map fetchReliabilityProfile
-        |> Seq.toList
-
-    let worstOf (serviceLevel1, serviceLevel2) =
-        match serviceLevel1, serviceLevel2 with
-        | Working(x), Working(y) -> if x > y then Working(x) else Working(y)
-        | Working(x), Degraded(y) -> Degraded(y)
-        | _, Unavailable(y) -> Unavailable(y)
-        | Degraded(x), Working(y) -> Degraded(x)
-        | Degraded(x), Degraded(y) -> if x > y then Degraded(x) else Degraded(y)
-        | Unavailable(x), _ -> Unavailable(x)
-
-    // memoize this as we'll end up visiting it twice as we check required and optional services
-    let rec attempt serviceResult required profiles =
-        match profiles with
-        | [] -> serviceResult
-        | profile :: rest ->
-            match profile.works() with
-            | Working(x) -> worstOf(attempt serviceResult required rest, Working(x))
-            | Degraded(x) -> worstOf(attempt serviceResult required rest, Degraded(x))
-            | Unavailable(x) -> if required then
-                                    Unavailable(x)
-                                else
-                                    worstOf(attempt serviceResult required rest, Degraded(x))
-
-    {
-        shorthand = service.reliabilityProfile.shorthand
-        works = fun () ->
-            let serviceResult = service.reliabilityProfile.works()
-            worstOf(attempt serviceResult true requiredProfiles, attempt serviceResult false optionalProfiles)
-    }
-
-let determineServiceUptime count service =
-    let profile = fetchReliabilityProfile service
-
-    [1 .. count]
-    |> List.map (fun _ -> profile.works())
-    |> List.fold (fun (successes, failures, degradations) result ->
-        match result with
-        | Unavailable(_) -> successes, failures + 1, degradations
-        | Working(_) -> successes + 1, failures, degradations
-        | Degraded(_) -> successes, failures, degradations + 1) (0, 0, 0)
+            {service with reliabilityProfile = strategy(service.reliabilityProfile)}

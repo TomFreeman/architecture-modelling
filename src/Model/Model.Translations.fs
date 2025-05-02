@@ -33,6 +33,7 @@ let traverse model visitNode visitLink starts =
 
     starts
     |> Seq.map visit
+    |> Seq.toList
 
 let rec debug (model:Model) component =
 

@@ -115,6 +115,7 @@ let linksOrDefault (collection: Dictionary<'a, List<'b>>) item =
     else
         List<'b>()
 
+[<Fable.Core.AttachMembers>]
 type Model() =
     class
         let Dependencies = Dictionary<Component, List<Link>>()

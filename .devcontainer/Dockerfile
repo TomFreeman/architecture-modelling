@@ -12,7 +12,7 @@ RUN curl -L https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh \
     && chmod +x ./dotnet-install.sh \
     && ./dotnet-install.sh
 
-ENV PATH="$PATH:~/.dotnet"
+ENV PATH="$PATH:/home/jovyan/.dotnet"
 
 RUN dotnet tool install fable --global \
     && dotnet tool install paket --global
